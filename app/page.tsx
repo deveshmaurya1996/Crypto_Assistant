@@ -6,24 +6,74 @@ import ChatBubble from './components/ChatBubble';
 import ChatInput from './components/ChatInput';
 import { getCryptoPrice, getTrendingCoins, searchCoinId, searchCrypto } from './utils/cryptoApi';
 import { useSpeech } from './hooks/useSpeech';
+import { Trash2 } from 'lucide-react';
+
+const STORAGE_KEY = 'crypto-chat-history';
+const PORTFOLIO_KEY = 'crypto-portfolio';
+
+const DEFAULT_MESSAGE: Message = {
+  id: 'welcome',
+  text: "Hi! I'm your crypto assistant. Ask me about prices, trending coins, or tell me about your holdings!",
+  sender: 'assistant',
+  timestamp: new Date(),
+  type: 'text'
+};
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: "Hi! I'm your crypto assistant. Ask me about prices, trending coins, or tell me about your holdings!",
-      sender: 'assistant',
-      timestamp: new Date(),
-      type: 'text'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
   const [portfolio, setPortfolio] = useState<Portfolio>({});
   const [portfolioPrices, setPortfolioPrices] = useState<{ [symbol: string]: CryptoData }>({});
-  const inputFocusRef = useRef<HTMLInputElement>(null);
-
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { speak, speechSupported } = useSpeech();
+
+  // Load saved data after component mounts (client-side only)
+  useEffect(() => {
+    setIsHydrated(true);
+    
+    // Load messages
+    const savedMessages = localStorage.getItem(STORAGE_KEY);
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        const messagesWithDates = parsedMessages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        setMessages(messagesWithDates);
+      } catch (error) {
+        console.error('Error parsing saved messages:', error);
+      }
+    }
+
+    // Load portfolio
+    const savedPortfolio = localStorage.getItem(PORTFOLIO_KEY);
+    if (savedPortfolio) {
+      try {
+        const parsedPortfolio = JSON.parse(savedPortfolio);
+        setPortfolio(parsedPortfolio);
+      } catch (error) {
+        console.error('Error parsing saved portfolio:', error);
+      }
+    }
+  }, []);
+
+  // Save messages to localStorage whenever they change (after hydration)
+  useEffect(() => {
+    if (isHydrated && messages.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    }
+  }, [messages, isHydrated]);
+
+  // Save portfolio to localStorage whenever it changes (after hydration)
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(portfolio));
+    }
+  }, [portfolio, isHydrated]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -34,11 +84,31 @@ export default function Home() {
       const input = document.querySelector('input[type="text"]') as HTMLInputElement;
       input?.focus();
     }, 100);
-  }
+  };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const clearChat = () => {
+    const newWelcomeMessage = {
+      ...DEFAULT_MESSAGE,
+      id: `welcome-${Date.now()}`,
+      timestamp: new Date()
+    };
+    
+    setMessages([newWelcomeMessage]);
+    setPortfolio({});
+    setPortfolioPrices({});
+    
+    if (isHydrated) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PORTFOLIO_KEY);
+    }
+    
+    setShowClearConfirm(false);
+    focusInput();
+  };
 
   const updatePortfolioPrices = useCallback(async () => {
     const prices: { [symbol: string]: CryptoData } = {};
@@ -67,7 +137,7 @@ export default function Home() {
 
   const addMessage = (text: string, sender: 'user' | 'assistant', type: 'text' | 'chart' | 'portfolio' = 'text', extraData?: any) => {
     const newMessage: Message = {
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       text,
       sender,
       timestamp: new Date(),
@@ -78,7 +148,7 @@ export default function Home() {
     
     setMessages(prev => [...prev, newMessage]);
     
-    if (sender === 'assistant' && speechSupported && type === 'text') {
+    if (sender === 'assistant' && speechSupported && type === 'text' && text) {
       speak(text);
     }
     
@@ -171,7 +241,6 @@ export default function Home() {
             
             addMessage(response, 'assistant');
             
-            // Add chart as a separate message
             if (data.sparkline_in_7d?.price) {
               addMessage('', 'assistant', 'chart', { data: data.sparkline_in_7d.price, symbol: data.symbol });
             }
@@ -214,7 +283,6 @@ export default function Home() {
         if (Object.keys(portfolio).length === 0) {
           addMessage("You haven't told me about any holdings yet. Try saying something like 'I have 2 ETH'", 'assistant');
         } else {
-          // Update prices before showing portfolio
           await updatePortfolioPrices();
           
           const totalValue = Object.entries(portfolio).reduce((total, [symbol, amount]) => {
@@ -223,8 +291,6 @@ export default function Home() {
           }, 0);
           
           addMessage(`Your portfolio is currently worth $${totalValue.toFixed(2)}`, 'assistant');
-          
-          // Add portfolio as a separate message
           addMessage('', 'assistant', 'portfolio', { portfolio, prices: portfolioPrices });
         }
         return;
@@ -262,7 +328,38 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <header className="bg-white shadow-sm p-4">
-        <h1 className="text-xl font-bold text-center">Crypto Chat Assistant</h1>
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <h1 className="text-xl font-bold">Crypto Chat Assistant</h1>
+          <div className="relative">
+            <button
+              onClick={() => setShowClearConfirm(!showClearConfirm)}
+              className="p-2 text-gray-600 hover:text-red-600 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Clear chat"
+            >
+              <Trash2 size={20} />
+            </button>
+            
+            {showClearConfirm && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border p-3 z-10">
+                <p className="text-sm text-gray-600 mb-3">Clear all chat history?</p>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={clearChat}
+                    className="flex-1 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
       
       <main className="flex-1 overflow-y-auto p-4">
