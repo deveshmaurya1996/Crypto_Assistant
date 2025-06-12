@@ -1,3 +1,5 @@
+'use client';
+
 import { Message } from '../types';
 import { format } from 'date-fns';
 import Chart from './Chart';
@@ -10,6 +12,10 @@ interface ChatBubbleProps {
 export default function ChatBubble({ message }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   
+  const formatTime = (date: Date) => {
+    return format(date, 'hh:mm a');
+  };
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div className={`max-w-[70%] ${isUser ? 'order-2' : 'order-1'}`}>
@@ -38,12 +44,14 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
               />
             </div>
           ) : (
-            <p className="whitespace-pre-wrap">{message.text}</p>
+            <>
+              <p className="whitespace-pre-wrap">{message.text}</p>
+              <p className={`text-xs mt-1 ${isUser ? 'text-blue-100' : 'text-gray-500'}`}>
+                {formatTime(message.timestamp)}
+              </p>
+            </>
           )}
         </div>
-        <p className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
-          {format(message.timestamp, 'HH:mm')}
-        </p>
       </div>
     </div>
   );

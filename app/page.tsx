@@ -8,6 +8,10 @@ import { getCryptoPrice, getTrendingCoins, searchCoinId, searchCrypto } from './
 import { useSpeech } from './hooks/useSpeech';
 import { Trash2 } from 'lucide-react';
 
+interface SavedMessage extends Omit<Message, 'timestamp'> {
+  timestamp: string;
+}
+
 const STORAGE_KEY = 'crypto-chat-history';
 const PORTFOLIO_KEY = 'crypto-portfolio';
 
@@ -38,8 +42,8 @@ export default function Home() {
     const savedMessages = localStorage.getItem(STORAGE_KEY);
     if (savedMessages) {
       try {
-        const parsedMessages = JSON.parse(savedMessages);
-        const messagesWithDates = parsedMessages.map((msg: any) => ({
+        const parsedMessages = JSON.parse(savedMessages) as SavedMessage[];
+        const messagesWithDates = parsedMessages.map((msg) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }));
@@ -53,7 +57,7 @@ export default function Home() {
     const savedPortfolio = localStorage.getItem(PORTFOLIO_KEY);
     if (savedPortfolio) {
       try {
-        const parsedPortfolio = JSON.parse(savedPortfolio);
+        const parsedPortfolio = JSON.parse(savedPortfolio) as Portfolio;
         setPortfolio(parsedPortfolio);
       } catch (error) {
         console.error('Error parsing saved portfolio:', error);
@@ -135,15 +139,20 @@ export default function Home() {
     }
   }, [portfolio, updatePortfolioPrices]);
 
-  const addMessage = (text: string, sender: 'user' | 'assistant', type: 'text' | 'chart' | 'portfolio' = 'text', extraData?: any) => {
+  const addMessage = (
+    text: string, 
+    sender: 'user' | 'assistant', 
+    type: 'text' | 'chart' | 'portfolio' = 'text', 
+    extraData?: Message['chartData'] | Message['portfolioData']
+  ) => {
     const newMessage: Message = {
       id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       text,
       sender,
       timestamp: new Date(),
       type,
-      ...(type === 'chart' && extraData ? { chartData: extraData } : {}),
-      ...(type === 'portfolio' && extraData ? { portfolioData: extraData } : {})
+      ...(type === 'chart' && extraData ? { chartData: extraData as Message['chartData'] } : {}),
+      ...(type === 'portfolio' && extraData ? { portfolioData: extraData as Message['portfolioData'] } : {})
     };
     
     setMessages(prev => [...prev, newMessage]);
