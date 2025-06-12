@@ -22,5 +22,5 @@ A conversational cryptocurrency web-chat application built with Next.js and Type
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/deveshmaurya1996/Crypto_Assistant.git
 cd crypto-chat

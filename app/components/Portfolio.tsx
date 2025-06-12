@@ -12,8 +12,8 @@ export default function PortfolioComponent({ portfolio, prices }: PortfolioProps
   }, 0);
 
   return (
-    <div className="bg-gray-100 rounded-lg p-4 mt-4">
-      <h3 className="text-lg font-semibold mb-3">Your Portfolio</h3>
+    <div className="bg-white rounded-lg p-4">
+      <h3 className="text-lg font-semibold mb-3 text-gray-800">Your Portfolio</h3>
       <div className="space-y-2">
         {Object.entries(portfolio).map(([symbol, amount]) => {
           const price = prices[symbol]?.current_price || 0;
@@ -22,11 +22,11 @@ export default function PortfolioComponent({ portfolio, prices }: PortfolioProps
           return (
             <div key={symbol} className="flex justify-between items-center">
               <div>
-                <span className="font-medium">{symbol.toUpperCase()}</span>
+                <span className="font-medium text-gray-800">{symbol.toUpperCase()}</span>
                 <span className="text-gray-600 ml-2">{amount} units</span>
               </div>
               <div className="text-right">
-                <p className="font-medium">${value.toFixed(2)}</p>
+                <p className="font-medium text-gray-800">${value.toFixed(2)}</p>
                 <p className="text-xs text-gray-600">${price.toFixed(2)} each</p>
               </div>
             </div>
@@ -35,8 +35,8 @@ export default function PortfolioComponent({ portfolio, prices }: PortfolioProps
       </div>
       <div className="border-t mt-3 pt-3">
         <div className="flex justify-between items-center">
-          <span className="font-semibold">Total Value</span>
-          <span className="font-semibold text-lg">${totalValue.toFixed(2)}</span>
+          <span className="font-semibold text-gray-800">Total Value</span>
+          <span className="font-semibold text-lg text-gray-800">${totalValue.toFixed(2)}</span>
         </div>
       </div>
     </div>

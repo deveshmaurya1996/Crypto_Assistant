@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, Send } from 'lucide-react';
 
 interface ChatInputProps {
@@ -10,11 +10,23 @@ export default function ChatInput({ onSendMessage, disabled }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Keep input focused
+  useEffect(() => {
+    if (!disabled) {
+      inputRef.current?.focus();
+    }
+  }, [disabled]);
 
   const handleSend = () => {
     if (input.trim() && !disabled) {
       onSendMessage(input.trim());
       setInput('');
+      // Keep focus on input after sending
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
@@ -36,10 +48,13 @@ export default function ChatInput({ onSendMessage, disabled }: ChatInputProps) {
         const transcript = event.results[0][0].transcript;
         setInput(transcript);
         setIsRecording(false);
+        // Focus input after speech recognition
+        inputRef.current?.focus();
       };
 
       recognition.onerror = () => {
         setIsRecording(false);
+        inputRef.current?.focus();
       };
 
       recognitionRef.current = recognition;
@@ -50,15 +65,17 @@ export default function ChatInput({ onSendMessage, disabled }: ChatInputProps) {
 
   return (
     <div className="p-4 border-t bg-white">
-      <div className="max-w-2xl mx-auto">
+      <div className='max-w-2xl mx-auto'>
         <div className="flex items-center space-x-2">
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask about crypto prices..."
             disabled={disabled}
+            autoFocus
             className="flex-1 p-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <button

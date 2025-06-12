@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Message, Portfolio, CryptoData } from './types';
 import ChatBubble from './components/ChatBubble';
 import ChatInput from './components/ChatInput';
-import Chart from './components/Chart';
-import PortfolioComponent from './components/Portfolio';
 import { getCryptoPrice, getTrendingCoins, searchCoinId, searchCrypto } from './utils/cryptoApi';
 import { useSpeech } from './hooks/useSpeech';
 
@@ -15,14 +13,15 @@ export default function Home() {
       id: '1',
       text: "Hi! I'm your crypto assistant. Ask me about prices, trending coins, or tell me about your holdings!",
       sender: 'assistant',
-      timestamp: new Date()
+      timestamp: new Date(),
+      type: 'text'
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [portfolio, setPortfolio] = useState<Portfolio>({});
   const [portfolioPrices, setPortfolioPrices] = useState<{ [symbol: string]: CryptoData }>({});
-  const [chartData, setChartData] = useState<{ data: number[], symbol: string } | null>(null);
-  
+  const inputFocusRef = useRef<HTMLInputElement>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { speak, speechSupported } = useSpeech();
 
@@ -30,11 +29,18 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const focusInput = () => {
+    setTimeout(() => {
+      const input = document.querySelector('input[type="text"]') as HTMLInputElement;
+      input?.focus();
+    }, 100);
+  }
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const updatePortfolioPrices = async () => {
+  const updatePortfolioPrices = useCallback(async () => {
     const prices: { [symbol: string]: CryptoData } = {};
     
     for (const symbol of Object.keys(portfolio)) {
@@ -43,13 +49,13 @@ export default function Home() {
         if (data) {
           prices[symbol] = data;
         }
-      } catch (error) {
-        console.error(`Error fetching price for ${symbol}:`, error);
+      } catch (err) {
+        console.error(`Error fetching price for ${symbol}:`, err);
       }
     }
     
     setPortfolioPrices(prices);
-  };
+  }, [portfolio]);
 
   useEffect(() => {
     if (Object.keys(portfolio).length > 0) {
@@ -57,19 +63,22 @@ export default function Home() {
       const interval = setInterval(updatePortfolioPrices, 30000);
       return () => clearInterval(interval);
     }
-  }, [portfolio]);
+  }, [portfolio, updatePortfolioPrices]);
 
-  const addMessage = (text: string, sender: 'user' | 'assistant') => {
+  const addMessage = (text: string, sender: 'user' | 'assistant', type: 'text' | 'chart' | 'portfolio' = 'text', extraData?: any) => {
     const newMessage: Message = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       text,
       sender,
-      timestamp: new Date()
+      timestamp: new Date(),
+      type,
+      ...(type === 'chart' && extraData ? { chartData: extraData } : {}),
+      ...(type === 'portfolio' && extraData ? { portfolioData: extraData } : {})
     };
     
     setMessages(prev => [...prev, newMessage]);
     
-    if (sender === 'assistant' && speechSupported) {
+    if (sender === 'assistant' && speechSupported && type === 'text') {
       speak(text);
     }
     
@@ -85,7 +94,8 @@ export default function Home() {
       text: '',
       sender: 'assistant',
       timestamp: new Date(),
-      isLoading: true
+      isLoading: true,
+      type: 'text'
     };
     setMessages(prev => [...prev, loadingMessage]);
 
@@ -97,10 +107,8 @@ export default function Home() {
         const amount = parseFloat(holdingMatch[1]);
         let symbol = holdingMatch[2].toLowerCase();
         
-        // Remove any numbers from the end of the symbol
         symbol = symbol.replace(/\d+$/, '');
         
-        // Try to fetch the price to validate the symbol
         try {
           const data = await getCryptoPrice(symbol);
           
@@ -129,7 +137,8 @@ export default function Home() {
               addMessage(`I couldn't find a cryptocurrency called "${symbol}". Please check the symbol and try again.`, 'assistant');
             }
           }
-        } catch (error) {
+        } catch (err) {
+          console.error('Error verifying cryptocurrency:', err);
           setMessages(prev => prev.filter(m => m.id !== 'loading'));
           addMessage(`Sorry, I couldn't verify that cryptocurrency. Please try again with a common symbol like BTC, ETH, SOL, etc.`, 'assistant');
         }
@@ -162,8 +171,9 @@ export default function Home() {
             
             addMessage(response, 'assistant');
             
+            // Add chart as a separate message
             if (data.sparkline_in_7d?.price) {
-              setChartData({ data: data.sparkline_in_7d.price, symbol: data.symbol });
+              addMessage('', 'assistant', 'chart', { data: data.sparkline_in_7d.price, symbol: data.symbol });
             }
           } else {
             addMessage("Sorry, I couldn't find price data for that cryptocurrency.", 'assistant');
@@ -193,14 +203,9 @@ export default function Home() {
       }
 
       if (lowerText.includes('chart') || lowerText.includes('graph')) {
-        const symbols = ['btc', 'bitcoin', 'eth', 'ethereum', 'bnb', 'sol', 'solana'];
-        const foundSymbol = symbols.find(symbol => lowerText.includes(symbol));
-        
-        if (foundSymbol && chartData) {
-          setMessages(prev => prev.filter(m => m.id !== 'loading'));
-          addMessage(`Here's the 7-day price chart for ${foundSymbol.toUpperCase()}:`, 'assistant');
-          return;
-        }
+        setMessages(prev => prev.filter(m => m.id !== 'loading'));
+        addMessage("Please ask for a specific coin's price first, and I'll show you the chart!", 'assistant');
+        return;
       }
 
       if (lowerText.includes('portfolio') || lowerText.includes('holdings')) {
@@ -209,12 +214,18 @@ export default function Home() {
         if (Object.keys(portfolio).length === 0) {
           addMessage("You haven't told me about any holdings yet. Try saying something like 'I have 2 ETH'", 'assistant');
         } else {
+          // Update prices before showing portfolio
+          await updatePortfolioPrices();
+          
           const totalValue = Object.entries(portfolio).reduce((total, [symbol, amount]) => {
             const price = portfolioPrices[symbol]?.current_price || 0;
             return total + (price * amount);
           }, 0);
           
           addMessage(`Your portfolio is currently worth $${totalValue.toFixed(2)}`, 'assistant');
+          
+          // Add portfolio as a separate message
+          addMessage('', 'assistant', 'portfolio', { portfolio, prices: portfolioPrices });
         }
         return;
       }
@@ -234,16 +245,17 @@ export default function Home() {
         addMessage("I'm not sure what you're asking. Try asking about crypto prices, trending coins, or tell me about your holdings!", 'assistant');
       }
       
-    } catch (error: any) {
+    } catch (err) {
       setMessages(prev => prev.filter(m => m.id !== 'loading'));
       
-      if (error.response?.status === 429) {
+      if (err instanceof Error && 'response' in err && (err as { response?: { status: number } }).response?.status === 429) {
         addMessage("⚠️ Rate limit reached. Please wait a moment before making another request.", 'assistant');
       } else {
         addMessage("Sorry, I encountered an error. Please try again later.", 'assistant');
       }
     } finally {
       setIsLoading(false);
+      focusInput();
     }
   };
 
@@ -258,16 +270,6 @@ export default function Home() {
           {messages.map(message => (
             <ChatBubble key={message.id} message={message} />
           ))}
-          
-          {chartData && (
-            <div className="mb-4">
-              <Chart data={chartData.data} symbol={chartData.symbol} />
-            </div>
-          )}
-          
-          {Object.keys(portfolio).length > 0 && (
-            <PortfolioComponent portfolio={portfolio} prices={portfolioPrices} />
-          )}
           
           <div ref={messagesEndRef} />
         </div>

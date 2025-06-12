@@ -1,5 +1,7 @@
 import { Message } from '../types';
 import { format } from 'date-fns';
+import Chart from './Chart';
+import PortfolioComponent from './Portfolio';
 
 interface ChatBubbleProps {
   message: Message;
@@ -23,6 +25,17 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
               <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
               <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100"></div>
               <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200"></div>
+            </div>
+          ) : message.type === 'chart' && message.chartData ? (
+            <div className="min-w-[300px]">
+              <Chart data={message.chartData.data} symbol={message.chartData.symbol} />
+            </div>
+          ) : message.type === 'portfolio' && message.portfolioData ? (
+            <div className="min-w-[300px]">
+              <PortfolioComponent 
+                portfolio={message.portfolioData.portfolio} 
+                prices={message.portfolioData.prices} 
+              />
             </div>
           ) : (
             <p className="whitespace-pre-wrap">{message.text}</p>
