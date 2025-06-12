@@ -27,7 +27,7 @@ interface SearchCoin {
   symbol: string;
 }
 
-const CACHE_DURATION = 60000; // 1 minute
+const CACHE_DURATION = 60000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000;
 const TIMEOUT = 30000;
@@ -70,7 +70,7 @@ const getCachedData = <T>(key: string): T | null => {
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.data as T;
   }
-  cache.delete(key); // Clean up expired cache
+  cache.delete(key);
   return null;
 };
 
@@ -111,7 +111,6 @@ const SYMBOL_TO_ID: { [key: string]: string } = {
 };
 
 export const getCryptoPrice = async (symbol: string): Promise<CryptoData | null> => {
-  // Convert symbol to lowercase and get CoinGecko ID
   const symbolLower = symbol.toLowerCase();
   const coinId = SYMBOL_TO_ID[symbolLower] || symbolLower;
   
@@ -145,7 +144,6 @@ export const getCryptoPrice = async (symbol: string): Promise<CryptoData | null>
     const apiError = error as ApiError;
     if (apiError.response?.status === 429) {
       console.error('Rate limit exceeded');
-      // Return cached data if available
       const fallbackCache = getCachedData<CryptoData>(cacheKey);
       if (fallbackCache) {
         return fallbackCache;
@@ -193,7 +191,6 @@ export const getTrendingCoins = async (): Promise<CryptoData[]> => {
   }
 
   try {
-    // Get trending coins first
     const trendingResponse = await retryRequest(() => 
       api.get<{ coins: TrendingCoin[] }>('/search/trending')
     );
@@ -202,13 +199,11 @@ export const getTrendingCoins = async (): Promise<CryptoData[]> => {
       return [];
     }
     
-    // Extract coin IDs from trending response
     const coinIds = trendingResponse.data.coins
       .slice(0, 10)
       .map(coin => coin.item.id)
       .join(',');
     
-    // Get market data for trending coins
     const marketResponse = await retryRequest(() => 
       api.get<CryptoData[]>('/coins/markets', {
         params: {
@@ -237,7 +232,6 @@ export const searchCrypto = async (query: string): Promise<CryptoData[]> => {
   }
 
   try {
-    // First search for coins
     const searchResponse = await retryRequest(() => 
       api.get<{ coins: SearchCoin[] }>('/search', {
         params: { query }
@@ -248,13 +242,11 @@ export const searchCrypto = async (query: string): Promise<CryptoData[]> => {
       return [];
     }
     
-    // Get top 5 coin IDs from search results
     const coinIds = searchResponse.data.coins
       .slice(0, 5)
       .map(coin => coin.id)
       .join(',');
     
-    // Get market data for searched coins
     const marketResponse = await retryRequest(() => 
       api.get<CryptoData[]>('/coins/markets', {
         params: {
@@ -274,7 +266,6 @@ export const searchCrypto = async (query: string): Promise<CryptoData[]> => {
   }
 };
 
-// Clear expired cache entries periodically
 setInterval(() => {
   const now = Date.now();
   cache.forEach((entry, key) => {
